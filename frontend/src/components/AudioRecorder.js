@@ -10,9 +10,9 @@ const AudioRecorder = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recorder.current = new Recorder(new (window.AudioContext || window.webkitAudioContext)(), {
-        onAnalysing: (data) => {
-          // You can use this callback to visualize audio data (e.g., with an audio visualizer)
-        },
+        // onAnalysing: (data) => {
+        //   // You can use this callback to visualize audio data (e.g., with an audio visualizer)
+        // },
       });
       recorder.current.init(stream);
       recorder.current.start();
