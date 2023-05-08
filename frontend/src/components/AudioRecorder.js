@@ -49,7 +49,6 @@ const AudioRecorder = () => {
 
   const sendAudio = async () => {
     const formData = new FormData();
-    // const audioURL = new Audio(URL.createObjectURL(audioBlob));
     formData.append("audio", new Blob([audioBlob], { type: "audio/wav" }));
 
     const response = await fetch("/transcribe", {
@@ -59,29 +58,59 @@ const AudioRecorder = () => {
 
     if (response.ok) {
       const data = await response.json();
-      console.log(data)
       setTranscription(data.transcription);
     } else {
       console.error("Failed to transcribe audio");
     }
   };
 
+  const RecordButtonController = () => {
+    let buttonText = ""
+    let cb = null;
+    const buttonTexts = {
+      "stop": "Stop Recording",
+      "start": "Start Recording",
+      "restart": "Record new Audio"
+    }
+    if(isRecording){
+      buttonText = buttonTexts.stop;
+      cb = stopRecording;
+    }
+    else{
+      if(audioBlob){
+        buttonText = buttonTexts.restart
+        cb = startRecording
+      }
+      else {
+        buttonText = buttonTexts.start
+      }
+      cb = startRecording
+    }
+    
+    return <button onClick={cb}>{buttonText}</button>
+  }
+
   return (
     <div className="audio-recorder">
-      <button onClick={isRecording ? stopRecording : startRecording}>
-        {isRecording ? "Stop Recording" : "Start Recording"}
-      </button>
-   
+      <div className="button-list">
+        <RecordButtonController/>
         <button onClick={playAudio} disabled={!audioBlob || isRecording}>
-          Play Recorded Audio
+          Preview
         </button>
-        <button onClick={sendAudio} disabled={!audioBlob ||  isRecording }>
-          Transcribe Audio
+        <button onClick={sendAudio} disabled={!audioBlob || isRecording}>
+          Transcribe
         </button>
+      </div>
+     
 
-        <div className="transcription">
-          <strong>Transcription:</strong>
-          <p>{transcription}</p>
+      <div className={audioBlob ? "transcription ready" : "transcription"}>
+        <strong>Audio</strong>
+       
+        <hr />
+
+        <strong>Transcription:</strong>
+        
+        <p>{transcription}</p>
       </div>
     </div>
   );

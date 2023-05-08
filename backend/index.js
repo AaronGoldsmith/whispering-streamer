@@ -25,7 +25,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*", // TODO: update this to the frontend URL in production
+    origin: "*", // TODO: [PROD] update this to the frontend URL in production
   },
 });
 

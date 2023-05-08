@@ -8,7 +8,8 @@ const WebSocketProvider = ({ children }) => {
   const socketRef = useRef();
 
   useEffect(() => {
-    socketRef.current = io("http://localhost:3001"); // replace with your backend server URL
+    // TODO: [PROD] replace with backend server URL
+    socketRef.current = io("http://localhost:3001"); 
     setSocket(socketRef.current);
 
     return () => {
