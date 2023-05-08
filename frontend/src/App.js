@@ -1,25 +1,16 @@
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
+import AudioRecorder from "./components/AudioRecorder";
+import { WebSocketProvider } from "./components/WebSocketProvider";
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <WebSocketProvider>
+      <div className="App">
+        <h1>Wedding Gift Thank You Card Assistant</h1>
+        <AudioRecorder />
+      </div>
+    </WebSocketProvider>
   );
 }
 
-export default App;
+export default App
