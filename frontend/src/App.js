@@ -1,6 +1,7 @@
 import React from "react";
 import AudioRecorder from "./components/AudioRecorder";
 import { WebSocketProvider } from "./components/WebSocketProvider";
+import './App.css'
 
 function App() {
   return (
