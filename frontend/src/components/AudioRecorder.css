@@ -1,21 +1,27 @@
-
-.audio-recorder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.transcription {
-  max-width: 600px;
-  margin-top: 2rem;
-  text-align: left;
+table.audio-controller {
+  width: 90%;
   border: 1px solid #ddd;
-  padding: 1rem;
   border-radius: 0.25rem;
+  padding: 1rem;
+  align-items: center;
+  text-align: left;
+  margin: 2em auto;
 }
 
-.transcription strong {
+td {
+  padding: 1rem;
+}
+
+div.audioPreview,
+div.transcription {
+  padding: 1rem;
+}
+
+div.transcription {
+  max-width: 600px;
+}
+
+strong {
   display: block;
   font-weight: bold;
-  margin-bottom: 0.5rem;
 }
