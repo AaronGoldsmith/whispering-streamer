@@ -1,5 +1,6 @@
 import React, { useState, useRef, useContext, useEffect} from "react";
 import { WebSocketContext } from "./WebSocketProvider";
+import  {CSVTable} from "./CSVTable"
 import "./AudioRecorder.css";
 
 // 25MB
@@ -9,31 +10,31 @@ const AudioRecorder = () => {
   const [audioBlob, setAudioBlob] = useState(null);
   const [transcription, setTranscription] = useState("")
   const [recordingList, setRecordingList] = useState(null)
-  const [parsedData, setParsedData] = useState("")
+  const [parsedData, setParsedData] = useState(null)
   const socket = useContext(WebSocketContext);
   const mediaRecorder = useRef(null)
   const audioStream = useRef(null)
 
 
   useEffect(() => {
+    // setParsedData("Name of Guest, Gift Details, Follow up question")
     if (socket) {
       socket.on('transcription', async (data) => {
         if (data.transcription) {
           // update transcription box with the newly receieved details
           // do not clear out the existing transcription
-          const updatedTranscription = `${transcription}\n\n${data.transcription}`
-          setTranscription(updatedTranscription);
-
+          setTranscription((prevTranscription) => `${prevTranscription}\n\n${data.transcription}`);
+    
           // async function that sends the transcription and receives a CSV formatted string
           // only send the current transcript
           const csvString = await sendTranscript(data.transcription)
-          const updatedCSV = `${parsedData}\n\n${csvString}`
-          setParsedData(updatedCSV)
+          console.log(csvString)
+          setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
         } else {
           console.error('Failed to transcribe audio');
         }
       });
-    }
+    }    
     return () => {
       if (socket) {
         socket.off('transcription');
@@ -96,10 +97,10 @@ const AudioRecorder = () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ "data": text })
-    });
+    })
     if (response.ok) {
       const data = await response.json();
-      return data;
+      return data.content
     }
   }
 
@@ -131,7 +132,7 @@ const AudioRecorder = () => {
     }
   };
 
-
+  const headers = ["Name of Guest", "Gift Details", "Follow up question"]
   return (
     <div className="audio-recorder">
       <div className="button-list">
@@ -145,15 +146,11 @@ const AudioRecorder = () => {
       <table className="audio-controller">
         <thead>
         <tr>
-          <th>Preview</th>
-          <th style={{"width": "70%"}}>Transcription</th>
+          <th>Transcription</th>
         </tr>
         </thead>
         <tbody>
         <tr>
-          <td className="audioPreview" data-label="Preview">
-              <audio src={audioBlob ? URL.createObjectURL(audioBlob) : ""} controls />
-          </td>
           <td className="transcription" data-label="Transcription"> 
               <p>{transcription}</p>
           </td>
@@ -163,10 +160,10 @@ const AudioRecorder = () => {
         </tr>
         </tbody>
       </table>
-      <div className="csv-extract">
-        <pre>
-        { parsedData == "" ? "Name of Guest, Gift Details, Follow up question": parsedData.content}
-        </pre>
+      <div className="csv-extract">          
+          <CSVTable headers={headers} data={parsedData}>
+        </CSVTable>
+       
       </div>
     </div>
   );
