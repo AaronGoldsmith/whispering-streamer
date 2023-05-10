@@ -180,18 +180,20 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
 
 app.post("/transform", async (req, res) => {  
   console.log(req.body)
-  const systemPrompt = {role: "system", content: "You are taking a transcription and formatting it as a CSV with headers \"Name of Guest\", \"Gift Details\", \"Follow up question to help with generating a thank you card\" (optional)."}
-  const noShot = [    {role: "user", content: "Oh my Two hundred dollars from Sharon's godmother. Uh, which what's your godmother's name, Bridget. Aaron sharon may, god pour all this blessings in your marriage may He guide you both with his love. Always cherish and love each other by swishes and the best is yet to come.It is really nice. Oh wow.\Jesus. 200 dollars in amazon cards from Tio Carlos\nAre you putting the gifts back in here? Yeah.\nThis is literally the best card ever, who is it from. Your dad. Oh, he literally chose the best fucking card. That is the will let them know. Aaron, and you're in too bad. The cats can't be at the wedding {dot} {dot}. We're thrilled to be here with you today. Sending much love. Always love.\nIrene. Okay. I like it looked like a jig anime. Yeah. That is a really nice. I like love. Oh. Yeah, okay. Wait no, yeah, my dad. Yeah we i think he thought he hand brought one over here. There's oh i think there is a card over there that he is also for my dad. If you just want to drop that real quick. The others too. And, We got. A thousand dollars from. Uh, the Conselmo family, right? Yeah, okay. This one must turn dresses and stay gave us 300. This is from granny. Five thousand dollars. Yeah.Oh yeah. and a thousand from Aunt sandy and uncle joe. Another gift from Doug! 500 dollars to bed bath and beyond."},
-                      {role: "assistant", content: "Name of Guest,Gift Details,Follow up question\nSharon's godmother (Bridget),200 dollars,\nTio Carlos,200 dollars in Amazon cards, dad,Best card ever, father of bride or groom? /Let them know it was the best card\nIrene,Card with love,\nConselmo family,1000 dollars,\nSteve,300 dollars,I might have misheard the name when you said \"stay gave us 300\"\nGranny,5000 dollars,\nAunt Sandy and Uncle Joe,1000 dollars,\nDoug,500 dollars to Bed Bath and Beyond,"}
+  const systemPrompt = {role: "system", content: "You are taking a transcription during a gift opening and formatting it for a CSV. The CSV exists with headers \"Name of Guest\", \"Gift Details\", \"Follow up question (optional)\". Only respond with the new line separated rows. Any other output will interfere with the program."}
+  const noShot = [    {role: "user", content: "Audio Transcription: Oh my Two hundred dollars from Bri's godmother. Uh, which what's your godmother's name, Bridget. Darron Bri may, god pour all this blessings in your marriage may He guide you both with his love. Always cherish and love each other by swishes and the best is yet to come.It is really nice. Oh wow.\nJesus. 200 dollars in amazon cards from Tio Carlos\nAre you putting the gifts back in here? Yeah.\nThis is literally the best card ever, who is it from. Your dad. Oh, he literally chose the best ***** card. That is the will let them know. Darron, and you're in too bad. The cats can't be at the wedding {dot} {dot}. We're thrilled to be here with you today. Sending much love. Always love.\nIrene. Okay. I like it looked like a jig anime. Yeah. That is a really nice. I like love. Oh. Yeah, okay. Wait no, yeah, my dad. Yeah we i think he thought he hand brought one over here. There's oh i think there is a card over there that he is also for my dad. If you just want to drop that real quick. The others too. And, We got. A thousand dollars from. Uh, the Dorelmo family, right? Yeah, okay. This one must turn dresses and stay gave us 300. This is from grandma. Five thousand dollars. Yeah.Oh yeah. and a thousand from Aunt sandy and uncle randy. Another gift from Doug! 500 dollars to bed bath and beyond. \nFile: Name of Guest, Gift Details, Follow up question"},
+                      {role: "assistant", content: "Bri's godmother (Bridget),200 dollars,\nTio Carlos,200 dollars in Amazon cards, dad,Best card ever, father of bride or groom? /Let them know it was the best card\nIrene,Card with love,\nDorelmo family,1000 dollars,\nSteve,300 dollars,I might have misheard the name when you said \"stay gave us 300\"\nGrandma,5000 dollars,\nAunt Sandy and Uncle Randy,1000 dollars,\nDoug,500 dollars to Bed Bath and Beyond,"}
   ]
   const fewShot = [
-    {role: "user", content: "I got one dollar from Joe and two dollars from Sam, three dollars from Jose, gift card to TJ's from Ma'am. Okay.. but yeah"},
-    {role: "assistant", content: "guest,gift details,follow up question\nJoe,$1,\nSam,$2,\nJose,$3 ,\nMa'am,gift card to TJ's,Did you say Ma'm or mom?"},
-  ]
+    {role: "user", content: "Audio Transcription: I got one dollar from Joe and two dollars from Sam, three dollars from Jose, gift card to TJ's from Ma'am. Okay.. but yeah"},
+    {role: "assistant", content: "Joe,$1,\nSam,$2,\nJose,$3 ,\nMa'am,gift card to TJ's,Did you say Ma'm or mom?"},  ]
+
+  const prompt = `Audio Transcription: ${req.body.data}\nFile: Name of Guest, Gift Details, Follow up question (optional)`
   const messages =  [
       systemPrompt,
+      ...noShot,
       ...fewShot,
-      {role: "user", content: req.body.data}
+      {role: "user", content: prompt}
     ]     
   // console.log(messages)
   try{
