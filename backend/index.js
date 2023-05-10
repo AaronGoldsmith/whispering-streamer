@@ -34,29 +34,14 @@ const io = new Server(server, {
   },
 });
 
-// io.on("connection", (socket) => {
-//   console.log("Client connected:", socket.id);
-  
-//   socket.on("stream", (data) => {
-//     // Here you can handle the incoming audio data
-//     console.log("Received audio data");
-//     console.log("Data chunk size: ", data.length);
-//     console.log(data[0], data[1], data[2], data[3])
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log("Client disconnected:", socket.id);
-//   });
-// });
 
 
 const streams = {};
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
-  
   let activeRecordings = {};
-
+  
   // Create a new writable stream for this client
   socket.on('start', () => {
       console.log('\n\nReceived Start')
@@ -83,7 +68,6 @@ io.on('connection', (socket) => {
 
     // Process the audio data and send it to the transcription service
     setTimeout(async () => {
-      // Process the audio data and send it to the transcription service
       try {
         const input = fs.createReadStream(streams[socket.id].tempFilePath);
         const output = streams[socket.id].outputFilePath;
@@ -125,7 +109,7 @@ io.on('connection', (socket) => {
         }
       }
       delete streams[socket.id];
-    }, 1000); // Adjust delay as needed
+    }, 1000); // Defaut delay to prevent overlap over start and end streams
   });
 
   socket.on('disconnect', () => {
@@ -137,13 +121,43 @@ io.on('connection', (socket) => {
     }
   });
 
+
+/**
+ * Transcribes an audio file in MP3 format using OpenAI API, and emits the transcription result to a socket.
+   @async
+   @function processMP3
+   @param {string} filepath - The path to the MP3 file to be transcribed.
+   @throws {Error} If the file path is invalid or there is an error in the transcription process.
+   @returns {Promise<void>} A Promise that resolves when the transcription is completed and the result is emitted to the socket.
+ */
   async function processMP3(filepath){
-    const resp = await openai.createTranscription(fs.createReadStream(filepath), "whisper-1");
-    const transcription = resp.data.text;
-    socket.emit("transcription", { transcription });
+    let filestream;
+    try{
+      filestream = fs.createReadStream(filepath)
+    }
+    catch(error){
+      throw ("Unable to read file at ", filepath)
+    }
+    try{
+      // Call OpenAI API to create transcription from the given file
+      const resp = await openai.createTranscription(filestream, "whisper-1");
+      const transcription = resp.data.text;
+      // Emit the transcription result to the socket
+      socket.emit("transcription", { transcription });
+    }
+    catch(error){
+      throw ("Unable to create transcription from: ", filepath)
+    }
+    
   }
 });
 
+  
+  
+  
+  
+  
+  
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
 
   try{
