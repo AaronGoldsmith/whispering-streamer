@@ -4,5 +4,5 @@
 .env
 
 # generated audio files
-.wav
-.mp3
+*.wav
+*.mp3

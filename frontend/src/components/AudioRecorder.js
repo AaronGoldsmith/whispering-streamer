@@ -1,7 +1,6 @@
 import React, { useState, useRef, useContext, useEffect} from "react";
-import "./AudioRecorder.css";
-// import "../styles/ResponsiveTable.css";
 import { WebSocketContext } from "./WebSocketProvider";
+import "./AudioRecorder.css";
 
 // 25MB
 const MAX_FILE_SIZE = 25000000;
@@ -10,7 +9,7 @@ const AudioRecorder = () => {
   const [audioBlob, setAudioBlob] = useState(null);
   const [transcription, setTranscription] = useState("")
   const [recordingList, setRecordingList] = useState(null)
-  const [parsedData, setParsedData] = useState(null)
+  const [parsedData, setParsedData] = useState("")
   const socket = useContext(WebSocketContext);
   const mediaRecorder = useRef(null)
   const audioStream = useRef(null)
@@ -18,10 +17,18 @@ const AudioRecorder = () => {
 
   useEffect(() => {
     if (socket) {
-      socket.on('transcription', (data) => {
+      socket.on('transcription', async (data) => {
         if (data.transcription) {
-          setTranscription(data.transcription);
-          // sendTranscript(data.transcription);
+          // update transcription box with the newly receieved details
+          // do not clear out the existing transcription
+          const updatedTranscription = `${transcription}\n\n${data.transcription}`
+          setTranscription(updatedTranscription);
+
+          // async function that sends the transcription and receives a CSV formatted string
+          // only send the current transcript
+          const csvString = await sendTranscript(data.transcription)
+          const updatedCSV = `${parsedData}\n\n${csvString}`
+          setParsedData(updatedCSV)
         } else {
           console.error('Failed to transcribe audio');
         }
@@ -74,6 +81,9 @@ const AudioRecorder = () => {
   
 
   //  not used, won't be used unless creating a custom perview
+  /**
+   * @deprecated
+   */
   const playAudio = () => {
     const audio = new Audio(URL.createObjectURL(audioBlob));
     audio.play();
@@ -89,10 +99,14 @@ const AudioRecorder = () => {
     });
     if (response.ok) {
       const data = await response.json();
-      setParsedData(data)
+      return data;
     }
   }
 
+  /**
+   * 
+   *  @deprecated
+   */
   const sendAudio = async () => {
     const formData = new FormData();
     formData.append("audio", new Blob([audioBlob], { type: "audio/wav" }));
@@ -127,12 +141,6 @@ const AudioRecorder = () => {
           {isRecording ? "Stop Recording" : "Start Recording"}
         </button>
 
-        <button
-          onClick={sendAudio}
-          disabled={!audioBlob || isRecording }
-        >
-          Transcribe
-        </button>
       </div>
       <table className="audio-controller">
         <thead>
@@ -157,7 +165,7 @@ const AudioRecorder = () => {
       </table>
       <div className="csv-extract">
         <pre>
-        {parsedData?parsedData.content:"Name of Guest,Gift Details,Follow up question"}
+        { parsedData == "" ? "Name of Guest, Gift Details, Follow up question": parsedData.content}
         </pre>
       </div>
     </div>

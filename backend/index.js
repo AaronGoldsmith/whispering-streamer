@@ -1,4 +1,5 @@
 require("dotenv").config();
+const util = require("./util");
 const fs = require("fs");
 const express = require("express");
 const http = require("http");
@@ -70,20 +71,26 @@ io.on('connection', (socket) => {
     setTimeout(async () => {
       try {
         const input = fs.createReadStream(streams[socket.id].tempFilePath);
-        const output = streams[socket.id].outputFilePath;
+        const output = streams[socket.id].outputFilePath
         console.log('Processing: ',streams[socket.id].tempFilePath )
         // Run the conversion process
         ffmpeg(input)
           .format("mp3")
-          .on('end', function() { 
+          .on('end', async function() { 
             // callback when ffmpeg finishes writing to disk executed 
             console.log('Finished processing');
-            processMP3(output)
-            if(streams[socket.id]){
-              streams[socket.id].tempFileStream.end();
-              fs.unlinkSync(streams[socket.id].tempFilePath);
+            try{
+              const transcription = await util.processMP3(openai,output);
+              socket.emit("transcription", { transcription });
+              // processMP3(output)
+              if(streams[socket.id]){
+                streams[socket.id].tempFileStream.end();
+                fs.unlinkSync(streams[socket.id].tempFilePath);
+              }
             }
-           
+            catch(error){
+              console.error(error)
+            }
           })
           .on('error', function(err) { // New error handler
             console.log('An error occurred during conversion: ' + err.message);
@@ -91,7 +98,7 @@ io.on('connection', (socket) => {
           .output(streams[socket.id].outputFilePath)
           .run();
 
-        console.log('mp3 saved to: ', streams[socket.id].outputFilePath)
+        // console.log('mp3 saved to: ', streams[socket.id].outputFilePath)
         
         streams[socket.id].tempFileStream.on('error', function(err) { // New error handler
           console.log('An error occurred with the file stream: ' + err.message);
