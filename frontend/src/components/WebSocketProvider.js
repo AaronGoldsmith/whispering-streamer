@@ -9,7 +9,7 @@ const WebSocketProvider = ({ children }) => {
 
   useEffect(() => {
     // TODO: [PROD] replace with backend server URL
-    socketRef.current = io("http://localhost:3001"); 
+    socketRef.current = io("http://localhost:3000"); 
     setSocket(socketRef.current);
 
     return () => {

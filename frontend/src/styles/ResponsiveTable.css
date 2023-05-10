@@ -1,0 +1,40 @@
+.audio-controller {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.audio-controller th,
+.audio-controller td {
+  border: none;
+  padding: 8px;
+  text-align: left;
+}
+
+.audio-controller th {
+  background-color: #f2f2f2;
+}
+
+/* Responsive table for screens below 768px */
+@media (max-width: 767px) {
+  .audio-controller,
+  .audio-controller th,
+  .audio-controller td {
+    display: block;
+  }
+
+  .audio-controller tr {
+    margin-bottom: 20px;
+  }
+
+  .audio-controller th,
+  .audio-controller td {
+    width: 100%;
+  }
+
+  .audio-controller td::before {
+    content: attr(data-label);
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+}

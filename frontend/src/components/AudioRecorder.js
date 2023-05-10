@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useContext, useEffect} from "react";
 import Recorder from "recorder-js";
 import "./AudioRecorder.css";
 // import "../styles/ResponsiveTable.css";
+import { WebSocketContext } from "./WebSocketProvider";
 
 // 25MB
 const MAX_FILE_SIZE = 25000000;
@@ -11,41 +12,68 @@ const AudioRecorder = () => {
   const [transcription, setTranscription] = useState("")
   const [recordingList, setRecordingList] = useState(null)
   const [parsedData, setParsedData] = useState(null)
+  const socket = useContext(WebSocketContext);
+  const mediaRecorder = useRef(null)
+  const audioStream = useRef(null)
   const recorder = useRef(null);
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recorder.current = new Recorder(new (window.AudioContext || window.webkitAudioContext)(), {
-        onAnalysing: (data) => {
-          setRecordingList(data)
-        },
-      });
-      recorder.current.init(stream);
-      recorder.current.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const stopRecording = async () => {
-    if (recorder.current && isRecording) {
-      try {
-        const { blob } = await recorder.current.stop();
-        setAudioBlob(blob);
-        setIsRecording(false);
-
-        // Stop the audio stream
-        if (recorder.current.stream) {
-          recorder.current.stream.getTracks().forEach(track => track.stop());
+  useEffect(() => {
+    if (socket) {
+      socket.on('transcription', (data) => {
+        if (data.transcription) {
+          setTranscription(data.transcription);
+          sendTranscript(data.transcription);
+        } else {
+          console.error('Failed to transcribe audio');
         }
-        recorder.current = null;
-      } catch (err) {
-        console.error(err);
-      }
+      });
     }
+    return () => {
+      if (socket) {
+        socket.off('transcription');
+      }
+    };
+  }, [socket]); // Adding socket as a dependency
+  
+
+
+
+  const startStream = async () => {
+
+    const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioStream.current = stream;
+    mediaRecorder.current  = new MediaRecorder(audioStream.current);
+
+    socket.emit('start');
+
+    // This event is fired when there is audio data available
+    mediaRecorder.current.ondataavailable = (e) => {
+      // Send the audio data to the server
+      console.log('size', e.data.size)
+      socket.emit('stream',e.data);
+
+    };
+    // stream data every 1 seconds
+    mediaRecorder.current.start(1000);
+    setIsRecording(true)
   };
+  
+
+  const stopStream = async () => {
+
+    // Emit a stop event
+    setIsRecording(false);
+    socket.emit("stop");
+    if (audioStream.current) {
+      audioStream.current.getTracks().forEach((track) => track.stop());
+    } else {
+      console.error("Audio stream is not defined");
+    }
+    mediaRecorder.current.active && await mediaRecorder.current.stop();
+    audioStream.current = null
+  }
+  
 
   //  not used, won't be used unless creating a custom perview
   const playAudio = () => {
@@ -96,7 +124,7 @@ const AudioRecorder = () => {
     <div className="audio-recorder">
       <div className="button-list">
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? stopStream : startStream}
         >
           {isRecording ? "Stop Recording" : "Start Recording"}
         </button>

@@ -2,9 +2,12 @@ require("dotenv").config();
 const fs = require("fs");
 const express = require("express");
 const http = require("http");
+const ffmpeg = require('fluent-ffmpeg');
 const { Server } = require("socket.io");
 const cors = require("cors")
+const path = require("path")
 const multer = require("multer");
+const { v4: uuidv4 } = require('uuid')
 const { Configuration, OpenAIApi } = require("openai");
 
 
@@ -31,29 +34,125 @@ const io = new Server(server, {
   },
 });
 
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+// io.on("connection", (socket) => {
+//   console.log("Client connected:", socket.id);
+  
+//   socket.on("stream", (data) => {
+//     // Here you can handle the incoming audio data
+//     console.log("Received audio data");
+//     console.log("Data chunk size: ", data.length);
+//     console.log(data[0], data[1], data[2], data[3])
+//   });
 
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
+//   socket.on("disconnect", () => {
+//     console.log("Client disconnected:", socket.id);
+//   });
+// });
+
+const streams = {};
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  let activeRecordings = {};
+
+  // Create a new writable stream for this client
+  socket.on('start', () => {
+      console.log('\n\nReceived Start')
+      const id = uuidv4()
+      const tempFilePath = path.join(__dirname, `${id}.wav`);
+      const outputFilePath = path.join(__dirname, `${id}.mp3`);
+      const tempFileStream = fs.createWriteStream(tempFilePath);
+      streams[socket.id] = { tempFileStream, tempFilePath, outputFilePath };
+      activeRecordings[socket.id] = true;
+      console.log(`creating ${tempFilePath}`);
+  });
+
+
+  socket.on('stream', (data) => {
+    if(activeRecordings[socket.id]){
+      console.log('Received data chunk');
+      streams[socket.id].tempFileStream.write(new Buffer.from(data));
+    } 
+  });
+
+  socket.on('stop', async () => {
+    console.log('Stopping recording\n');
+    activeRecordings[socket.id] = false;
+
+    // Process the audio data and send it to the transcription service
+    setTimeout(async () => {
+      // Process the audio data and send it to the transcription service
+      try {
+        const input = fs.createReadStream(streams[socket.id].tempFilePath);
+      
+        console.log('Processing: ',streams[socket.id].tempFilePath )
+        // Run the conversion process
+        ffmpeg(input)
+          .format("mp3")
+          .on('end', function() { 
+            console.log('Finished processing');
+            if(streams[socket.id]){
+              streams[socket.id].tempFileStream.end();
+              fs.unlinkSync(streams[socket.id].tempFilePath);
+            }
+          })
+          .on('error', function(err) { // New error handler
+            console.log('An error occurred during conversion: ' + err.message);
+          })
+          .output(streams[socket.id].outputFilePath)
+          .run();
+        console.log('mp3 saved to: ', streams[socket.id].outputFilePath)
+        streams[socket.id].tempFileStream.on('error', function(err) { // New error handler
+          console.log('An error occurred with the file stream: ' + err.message);
+        });
+  
+      } catch (error) {
+        console.error("Error during transcription:", error);
+        socket.emit("transcription", { error: "Transcription failed" });
+
+         // Delete the temp file even if an error occurred
+        if(streams[socket.id]){
+          fs.unlinkSync(streams[socket.id].tempFilePath);
+        }
+      }
+      delete streams[socket.id];
+    }, 1000); // Adjust delay as needed
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+    // If the client disconnected before sending 'endStream', we should clean up the stream and file
+    if (streams[socket.id]) {
+      streams[socket.id].tempFileStream.end();
+      delete streams[socket.id];
+    }
   });
 });
 
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
-  try {
-    const audioBuffer = Buffer.from(req.file.buffer);
-    fs.writeFileSync("temp_audio.wav", audioBuffer);
 
-    const resp = await openai.createTranscription(fs.createReadStream("temp_audio.wav"), "whisper-1","The transcript is taken while opening wedding gifts. There may be some background noise which interfered. \"unkonwn\" got us a visa gift card. \nI got one dollar from Joe and two dollars from Sam, \nthree dollars from Jose, gift card to TJ's from Ma'am.\n\n Okay.. but yeah");
-    fs.unlinkSync("temp_audio.wav");
+  const audioBuffer = Buffer.from(req.file.buffer);
+  fs.writeFileSync('audio.wav', audioBuffer);
+
+  try {
+    // fs.writeFileSync("temp_audio.wav", audioBuffer);
+    const input = fs.createReadStream('audio.wav');
+    const transform = ffmpeg(input)
+    .format('mp3')
+    .pipe();
+
+    const resp = await openai.createTranscription(transform, "whisper-1");
+
 
     const transcription = resp.data.text;
     res.status(200).json({ transcription });
 
   } catch (error) {
-    console.error("Error during transcription:", error);
+    console.error("Error during transcription:", error.data);
     res.status(500).json({ error: "Transcription failed" });
   }
+  fs.unlinkSync("audio.wav");
 });
 
 app.post("/transform", async (req, res) => {  
