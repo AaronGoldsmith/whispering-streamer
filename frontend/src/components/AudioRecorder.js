@@ -1,5 +1,4 @@
 import React, { useState, useRef, useContext, useEffect} from "react";
-import Recorder from "recorder-js";
 import "./AudioRecorder.css";
 // import "../styles/ResponsiveTable.css";
 import { WebSocketContext } from "./WebSocketProvider";
@@ -15,7 +14,6 @@ const AudioRecorder = () => {
   const socket = useContext(WebSocketContext);
   const mediaRecorder = useRef(null)
   const audioStream = useRef(null)
-  const recorder = useRef(null);
 
 
   useEffect(() => {
@@ -23,7 +21,7 @@ const AudioRecorder = () => {
       socket.on('transcription', (data) => {
         if (data.transcription) {
           setTranscription(data.transcription);
-          sendTranscript(data.transcription);
+          // sendTranscript(data.transcription);
         } else {
           console.error('Failed to transcribe audio');
         }

@@ -49,6 +49,7 @@ const io = new Server(server, {
 //   });
 // });
 
+
 const streams = {};
 
 io.on('connection', (socket) => {
@@ -85,28 +86,35 @@ io.on('connection', (socket) => {
       // Process the audio data and send it to the transcription service
       try {
         const input = fs.createReadStream(streams[socket.id].tempFilePath);
-      
+        const output = streams[socket.id].outputFilePath;
         console.log('Processing: ',streams[socket.id].tempFilePath )
         // Run the conversion process
         ffmpeg(input)
           .format("mp3")
           .on('end', function() { 
+            // callback when ffmpeg finishes writing to disk executed 
             console.log('Finished processing');
+            processMP3(output)
             if(streams[socket.id]){
               streams[socket.id].tempFileStream.end();
               fs.unlinkSync(streams[socket.id].tempFilePath);
             }
+           
           })
           .on('error', function(err) { // New error handler
             console.log('An error occurred during conversion: ' + err.message);
           })
           .output(streams[socket.id].outputFilePath)
           .run();
+
         console.log('mp3 saved to: ', streams[socket.id].outputFilePath)
+        
         streams[socket.id].tempFileStream.on('error', function(err) { // New error handler
           console.log('An error occurred with the file stream: ' + err.message);
         });
-  
+
+    
+
       } catch (error) {
         console.error("Error during transcription:", error);
         socket.emit("transcription", { error: "Transcription failed" });
@@ -128,23 +136,18 @@ io.on('connection', (socket) => {
       delete streams[socket.id];
     }
   });
+
+  async function processMP3(filepath){
+    const resp = await openai.createTranscription(fs.createReadStream(filepath), "whisper-1");
+    const transcription = resp.data.text;
+    socket.emit("transcription", { transcription });
+  }
 });
 
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
 
-  const audioBuffer = Buffer.from(req.file.buffer);
-  fs.writeFileSync('audio.wav', audioBuffer);
-
-  try {
-    // fs.writeFileSync("temp_audio.wav", audioBuffer);
-    const input = fs.createReadStream('audio.wav');
-    const transform = ffmpeg(input)
-    .format('mp3')
-    .pipe();
-
+  try{
     const resp = await openai.createTranscription(transform, "whisper-1");
-
-
     const transcription = resp.data.text;
     res.status(200).json({ transcription });
 
@@ -152,7 +155,6 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
     console.error("Error during transcription:", error.data);
     res.status(500).json({ error: "Transcription failed" });
   }
-  fs.unlinkSync("audio.wav");
 });
 
 app.post("/transform", async (req, res) => {  
