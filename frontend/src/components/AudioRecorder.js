@@ -56,9 +56,7 @@ const AudioRecorder = () => {
     // This event is fired when there is audio data available
     mediaRecorder.current.ondataavailable = (e) => {
       // Send the audio data to the server
-      console.log('size', e.data.size)
       socket.emit('stream',e.data);
-
     };
     // stream data every 1 seconds
     mediaRecorder.current.start(1000);
