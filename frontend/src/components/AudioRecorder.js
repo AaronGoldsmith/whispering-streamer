@@ -8,6 +8,7 @@ const MAX_FILE_SIZE = 25000000;
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
+  const [intervalId, setIntervalId] = useState(null);
   const [transcription, setTranscription] = useState("")
   const [recordingList, setRecordingList] = useState(null)
   const [parsedData, setParsedData] = useState(null)
@@ -44,40 +45,60 @@ const AudioRecorder = () => {
   
 
 
-
+  let chunks = [];
+  const segmentDuration = 5000; // 5 seconds
+  
   const startStream = async () => {
-
     const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioStream.current = stream;
     mediaRecorder.current  = new MediaRecorder(audioStream.current);
-
-    socket.emit('start');
-
+  
     // This event is fired when there is audio data available
     mediaRecorder.current.ondataavailable = (e) => {
-      // Send the audio data to the server
-      socket.emit('stream',e.data);
+      // Add chunk to chunks array
+      chunks.push(e.data);
     };
-    // stream data every 1 seconds
-    mediaRecorder.current.start(1000);
-    setIsRecording(true)
+  
+    mediaRecorder.current.onstop = () => {
+      // When recording is stopped, send the accumulated chunks to the server
+      socket.emit('stream', new Blob(chunks, { 'type' : 'audio/wav' }));
+      // Clear chunks for the next recording
+      chunks = [];
+      // If we are still recording, immediately start the next segment
+      if (isRecording) {
+        mediaRecorder.current.start();
+      }
+    };
+  
+    const intervalId = setInterval(() => {
+      if (mediaRecorder.current.state === 'recording') {
+        mediaRecorder.current.stop();
+      }
+    }, segmentDuration);
+  
+    setIsRecording(true);
+    setIntervalId(intervalId);
+  
+    mediaRecorder.current.start();
   };
   
-
-  const stopStream = async () => {
-
-    // Emit a stop event
-    setIsRecording(false);
-    socket.emit("stop");
-    if (audioStream.current) {
-      audioStream.current.getTracks().forEach((track) => track.stop());
-    } else {
-      console.error("Audio stream is not defined");
+  const stopStream = () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
     }
-    mediaRecorder.current.active && await mediaRecorder.current.stop();
-    audioStream.current = null
-  }
+    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
+      mediaRecorder.current.stop();
+    }
+    if (audioStream.current) {
+      audioStream.current.getTracks().forEach(track => track.stop());
+      audioStream.current = null;
+    }
+    setIsRecording(false);
+  };
   
+  
+
 
   //  not used, won't be used unless creating a custom perview
   /**
