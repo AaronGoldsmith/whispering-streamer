@@ -1,58 +1,149 @@
-import React, { useState, useRef } from "react";
-import Recorder from "recorder-js";
+import React, { useState, useRef, useContext, useEffect} from "react";
+import { WebSocketContext } from "./WebSocketProvider";
+import { v4 as uuidv4 } from 'uuid';
+import  {CSVTable} from "./CSVTable"
 import "./AudioRecorder.css";
-// import "../styles/ResponsiveTable.css";
 
-// 25MB
-const MAX_FILE_SIZE = 25000000;
+const MIN_BLOB_SIZE = 1024; // 1KB 
+
+
+const isValid = (str) => {
+  // break early and don't add to parsed data
+  if(str.length<4 || str.substring(0,4) == '[NA]'){
+    return false
+  }
+  return true;
+}
+
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
+  const [intervalId, setIntervalId] = useState(null);
   const [transcription, setTranscription] = useState("")
-  const [recordingList, setRecordingList] = useState(null)
   const [parsedData, setParsedData] = useState(null)
-  const recorder = useRef(null);
+  const socket = useContext(WebSocketContext);
+  const mediaRecorder = useRef(null)
+  const audioStream = useRef(null)
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recorder.current = new Recorder(new (window.AudioContext || window.webkitAudioContext)(), {
-        onAnalysing: (data) => {
-          setRecordingList(data)
-        },
+  let chunks = [];
+  const segmentDuration = 10000;
+
+  // as soon as the component mounts
+  useEffect(() => {
+    // request for access to the client microphone
+    isRecording && navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      audioStream.current = stream;
+      mediaRecorder.current = new MediaRecorder(stream);
+      mediaRecorder.current.ondataavailable = handleDataAvailable;
+      mediaRecorder.current.onstop = handleStop;
+    });
+
+    if (socket) {
+      socket.on('transcription', async (data) => {
+        if (data.transcription) {
+          // update transcription box with the newly receieved details
+          // do not clear out the existing transcription
+          setTranscription((prevTranscription) => `${prevTranscription}\n\n${data.transcription}`);
+    
+          // async function that sends the transcription and receives a CSV formatted string
+          // Note: only send the current transcript
+          const csvString = await sendTranscript(data.transcription)
+          isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
+        }
+        // data.transcription == false when data.transcription = ''
+        else if(data.transcription == ''){
+          console.log('no transcription recorded')
+        } 
+        else {
+          console.error('Failed to transcribe audio');
+        }
       });
-      recorder.current.init(stream);
-      recorder.current.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error(err);
+    }    
+    return () => {
+      if (socket) {
+        socket.off('transcription');
+      }
+    };
+  }, [socket]); // if socket updates, rerun the block
+
+  function handleStop() {
+    const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+    // don't send audio blobs under 1kb
+    if(audioBlob.size > MIN_BLOB_SIZE) {
+      const segmentId = uuidv4();
+      console.log(`Sending audio segment ${segmentId}`);
+      socket.emit('stream', {segmentId, audioBlob});
     }
+    chunks = [];
+    if (isRecording) {
+      if (mediaRecorder.current.state === 'recording') {
+        mediaRecorder.current.stop();
+      }
+      mediaRecorder.current.start(segmentDuration);
+    }
+  }
+  
+  // called when the user clicks the "start recording" button
+  const startStream = async () => {
+    // start and stop recording at regular intervals to simulate chunked streaming
+    const intervalId = setInterval(() => {
+      if (mediaRecorder.current.state === 'recording') {
+        mediaRecorder.current.stop();
+        mediaRecorder.current.start(segmentDuration)
+      }
+    }, segmentDuration);
+
+    setIsRecording(true);
+    setIntervalId(intervalId);
+    setupStream();
+
+    // mediaRecorder.current.start();
   };
 
-  const stopRecording = async () => {
-    if (recorder.current && isRecording) {
-      try {
-        const { blob } = await recorder.current.stop();
-        setAudioBlob(blob);
-        setIsRecording(false);
+  const setupStream = () => {
+   navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      audioStream.current = stream;
+      mediaRecorder.current = new MediaRecorder(stream);
+      mediaRecorder.current.ondataavailable = handleDataAvailable;
+      mediaRecorder.current.onstop = handleStop;
+      mediaRecorder.current.start(segmentDuration);
+    });
+  }
 
-        // Stop the audio stream
-        if (recorder.current.stream) {
-          recorder.current.stream.getTracks().forEach(track => track.stop());
-        }
-        recorder.current = null;
-      } catch (err) {
-        console.error(err);
+  const stopStream = () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
+    }
+    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
+      mediaRecorder.current.stop();
+    }
+    if (audioStream.current) {
+      audioStream.current.getTracks().forEach(track => track.stop());
+      audioStream.current = null;
+    }
+    setIsRecording(false)
+  };
+
+
+  const handleDataAvailable = (event) => {
+    if (event.data.size > 0) {
+      chunks.push(event.data);
+      const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+      if(audioBlob.size > MIN_BLOB_SIZE) {
+        const segmentId = uuidv4();
+        // console.log(`Sending audio segment ${segmentId}`);
+        // console.log(audioBlob)
+        socket.emit('stream', {segmentId, audioBlob});
+        chunks = [];
       }
     }
+    else{
+      console.log('no data received in the event')
+    }
   };
-
-  //  not used, won't be used unless creating a custom perview
-  const playAudio = () => {
-    const audio = new Audio(URL.createObjectURL(audioBlob));
-    audio.play();
-  };
-
+  
   const sendTranscript = async (text) => {
     const response = await fetch("/transform", {
       method: "POST",
@@ -60,79 +151,42 @@ const AudioRecorder = () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ "data": text })
-    });
+    })
     if (response.ok) {
       const data = await response.json();
-      setParsedData(data)
+      return data.content
     }
   }
 
-  const sendAudio = async () => {
-    const formData = new FormData();
-    formData.append("audio", new Blob([audioBlob], { type: "audio/wav" }));
-    console.log(audioBlob.size)
-    if (audioBlob.size > MAX_FILE_SIZE) {
-      // Replace MAX_FILE_SIZE with the maximum size in bytes you want to allow
-      console.error(`The audio file is too large. Maximum size is ${MAX_FILE_SIZE} bytes.`);
-      return;
-    }
-  
-    const response = await fetch("/transcribe", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      setTranscription(data.transcription);
-      sendTranscript(data.transcription)
-    } else {
-      console.error("Failed to transcribe audio");
-    }
-  };
-
-
+  const headers = ["Name of Guest", "Gift Details", "Follow up question"]
   return (
     <div className="audio-recorder">
       <div className="button-list">
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? stopStream : startStream}
         >
           {isRecording ? "Stop Recording" : "Start Recording"}
         </button>
 
-        <button
-          onClick={sendAudio}
-          disabled={!audioBlob || isRecording }
-        >
-          Transcribe
-        </button>
       </div>
       <table className="audio-controller">
         <thead>
         <tr>
-          <th>Preview</th>
-          <th style={{"width": "70%"}}>Transcription</th>
+          <th>Transcription</th>
         </tr>
         </thead>
         <tbody>
         <tr>
-          <td className="audioPreview" data-label="Preview">
-              <audio src={audioBlob ? URL.createObjectURL(audioBlob) : ""} controls />
-          </td>
           <td className="transcription" data-label="Transcription"> 
               <p>{transcription}</p>
           </td>
         </tr>
-        <tr>
-          <td>{recordingList}</td>
-        </tr>
         </tbody>
       </table>
-      <div className="csv-extract">
-        <pre>
-        {parsedData?parsedData.content:"Name of Guest,Gift Details,Follow up question"}
-        </pre>
+      <div className="csv-extract">          
+          <CSVTable headers={headers} data={parsedData}>
+        </CSVTable>
+       
       </div>
     </div>
   );
