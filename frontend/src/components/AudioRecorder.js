@@ -4,8 +4,17 @@ import { v4 as uuidv4 } from 'uuid';
 import  {CSVTable} from "./CSVTable"
 import "./AudioRecorder.css";
 
-// 25MB
-const MIN_BLOB_SIZE = 1024;
+const MIN_BLOB_SIZE = 1024; // 1KB 
+
+
+const isValid = (str) => {
+  // break early and don't add to parsed data
+  if(str.length<4 || str.substring(0,4) == '[NA]'){
+    return false
+  }
+  return true;
+}
+
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [intervalId, setIntervalId] = useState(null);
@@ -15,13 +24,13 @@ const AudioRecorder = () => {
   const mediaRecorder = useRef(null)
   const audioStream = useRef(null)
 
-// let mediaRecorder = null;
-let chunks = [];
-let segmentDuration = 10000;
+  let chunks = [];
+  const segmentDuration = 10000;
 
   // as soon as the component mounts
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ audio: true })
+    // request for access to the client microphone
+    isRecording && navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
       audioStream.current = stream;
       mediaRecorder.current = new MediaRecorder(stream);
@@ -29,7 +38,6 @@ let segmentDuration = 10000;
       mediaRecorder.current.onstop = handleStop;
     });
 
-    // setParsedData("Name of Guest, Gift Details, Follow up question")
     if (socket) {
       socket.on('transcription', async (data) => {
         if (data.transcription) {
@@ -38,13 +46,16 @@ let segmentDuration = 10000;
           setTranscription((prevTranscription) => `${prevTranscription}\n\n${data.transcription}`);
     
           // async function that sends the transcription and receives a CSV formatted string
-          // only send the current transcript
+          // Note: only send the current transcript
           const csvString = await sendTranscript(data.transcription)
-          console.log(csvString)
-          setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
-        } else {
+          isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
+        }
+        // data.transcription == false when data.transcription = ''
+        else if(data.transcription == ''){
+          console.log('no transcription recorded')
+        } 
+        else {
           console.error('Failed to transcribe audio');
-          console.log(data)
         }
       });
     }    
@@ -53,14 +64,14 @@ let segmentDuration = 10000;
         socket.off('transcription');
       }
     };
-  }, [socket]); // Adding socket as a dependency
+  }, [socket]); // if socket updates, rerun the block
 
   function handleStop() {
     const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+    // don't send audio blobs under 1kb
     if(audioBlob.size > MIN_BLOB_SIZE) {
       const segmentId = uuidv4();
       console.log(`Sending audio segment ${segmentId}`);
-      console.log(audioBlob)
       socket.emit('stream', {segmentId, audioBlob});
     }
     chunks = [];
@@ -74,39 +85,7 @@ let segmentDuration = 10000;
   
   // called when the user clicks the "start recording" button
   const startStream = async () => {
-    // request for access to the client microphone
-    // const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    // // assign the audioStream ref to the stream
-    // audioStream.current = stream;
-
-    // // create a MediaRecorder object to recieve the audio
-    // mediaRecorder.current  = new MediaRecorder(audioStream.current);
-
-
-   
-
-    // mediaRecorder.current.ondataavailable = (e) => {
-    //   console.log('mediaRecorder.ondataavailable called.\n\treceived data')
-    //   handleDataAvailable(e)
-    // };
-
-    // mediaRecorder.current.onstop = () => {
-    //   console.log('mediaRecorder.current.onstop called')
-    //   const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
-    //   if(audioBlob.size > MIN_BLOB_SIZE) {
-    //     const segmentId = uuidv4();
-    //     console.log(`Sending audio segment ${segmentId}`);
-    //     socket.emit('stream', {segmentId, audioBlob});
-    //   }
-    //   chunks = [];
-    //   if (isRecording) {
-    //     console.log('Starting new recording');
-    //     mediaRecorder.current.start();
-    //   }
-    // };
-    
-
+    // start and stop recording at regular intervals to simulate chunked streaming
     const intervalId = setInterval(() => {
       if (mediaRecorder.current.state === 'recording') {
         mediaRecorder.current.stop();
@@ -122,9 +101,14 @@ let segmentDuration = 10000;
   };
 
   const setupStream = () => {
-    mediaRecorder.current.start(segmentDuration);
-
-   
+   navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      audioStream.current = stream;
+      mediaRecorder.current = new MediaRecorder(stream);
+      mediaRecorder.current.ondataavailable = handleDataAvailable;
+      mediaRecorder.current.onstop = handleStop;
+      mediaRecorder.current.start(segmentDuration);
+    });
   }
 
   const stopStream = () => {
@@ -144,14 +128,13 @@ let segmentDuration = 10000;
 
 
   const handleDataAvailable = (event) => {
-    console.log('reached handleDataAvailable')
     if (event.data.size > 0) {
       chunks.push(event.data);
       const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
       if(audioBlob.size > MIN_BLOB_SIZE) {
         const segmentId = uuidv4();
-        console.log(`Sending audio segment ${segmentId}`);
-        console.log(audioBlob)
+        // console.log(`Sending audio segment ${segmentId}`);
+        // console.log(audioBlob)
         socket.emit('stream', {segmentId, audioBlob});
         chunks = [];
       }
