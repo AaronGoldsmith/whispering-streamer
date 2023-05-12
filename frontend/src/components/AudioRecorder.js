@@ -1,23 +1,34 @@
 import React, { useState, useRef, useContext, useEffect} from "react";
 import { WebSocketContext } from "./WebSocketProvider";
+import { v4 as uuidv4 } from 'uuid';
 import  {CSVTable} from "./CSVTable"
 import "./AudioRecorder.css";
 
 // 25MB
-const MAX_FILE_SIZE = 25000000;
+const MIN_BLOB_SIZE = 1024;
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
   const [intervalId, setIntervalId] = useState(null);
   const [transcription, setTranscription] = useState("")
-  const [recordingList, setRecordingList] = useState(null)
   const [parsedData, setParsedData] = useState(null)
   const socket = useContext(WebSocketContext);
   const mediaRecorder = useRef(null)
   const audioStream = useRef(null)
 
+// let mediaRecorder = null;
+let chunks = [];
+let segmentDuration = 10000;
 
+  // as soon as the component mounts
   useEffect(() => {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      audioStream.current = stream;
+      mediaRecorder.current = new MediaRecorder(stream);
+      mediaRecorder.current.ondataavailable = handleDataAvailable;
+      mediaRecorder.current.onstop = handleStop;
+    });
+
     // setParsedData("Name of Guest, Gift Details, Follow up question")
     if (socket) {
       socket.on('transcription', async (data) => {
@@ -33,6 +44,7 @@ const AudioRecorder = () => {
           setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
         } else {
           console.error('Failed to transcribe audio');
+          console.log(data)
         }
       });
     }    
@@ -42,46 +54,79 @@ const AudioRecorder = () => {
       }
     };
   }, [socket]); // Adding socket as a dependency
-  
 
-
-  let chunks = [];
-  const segmentDuration = 5000; // 5 seconds
-  
-  const startStream = async () => {
-    const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioStream.current = stream;
-    mediaRecorder.current  = new MediaRecorder(audioStream.current);
-  
-    // This event is fired when there is audio data available
-    mediaRecorder.current.ondataavailable = (e) => {
-      // Add chunk to chunks array
-      chunks.push(e.data);
-    };
-  
-    mediaRecorder.current.onstop = () => {
-      // When recording is stopped, send the accumulated chunks to the server
-      socket.emit('stream', new Blob(chunks, { 'type' : 'audio/wav' }));
-      // Clear chunks for the next recording
-      chunks = [];
-      // If we are still recording, immediately start the next segment
-      if (isRecording) {
-        mediaRecorder.current.start();
-      }
-    };
-  
-    const intervalId = setInterval(() => {
+  function handleStop() {
+    const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+    if(audioBlob.size > MIN_BLOB_SIZE) {
+      const segmentId = uuidv4();
+      console.log(`Sending audio segment ${segmentId}`);
+      console.log(audioBlob)
+      socket.emit('stream', {segmentId, audioBlob});
+    }
+    chunks = [];
+    if (isRecording) {
       if (mediaRecorder.current.state === 'recording') {
         mediaRecorder.current.stop();
       }
-    }, segmentDuration);
+      mediaRecorder.current.start(segmentDuration);
+    }
+  }
   
+  // called when the user clicks the "start recording" button
+  const startStream = async () => {
+    // request for access to the client microphone
+    // const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // // assign the audioStream ref to the stream
+    // audioStream.current = stream;
+
+    // // create a MediaRecorder object to recieve the audio
+    // mediaRecorder.current  = new MediaRecorder(audioStream.current);
+
+
+   
+
+    // mediaRecorder.current.ondataavailable = (e) => {
+    //   console.log('mediaRecorder.ondataavailable called.\n\treceived data')
+    //   handleDataAvailable(e)
+    // };
+
+    // mediaRecorder.current.onstop = () => {
+    //   console.log('mediaRecorder.current.onstop called')
+    //   const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+    //   if(audioBlob.size > MIN_BLOB_SIZE) {
+    //     const segmentId = uuidv4();
+    //     console.log(`Sending audio segment ${segmentId}`);
+    //     socket.emit('stream', {segmentId, audioBlob});
+    //   }
+    //   chunks = [];
+    //   if (isRecording) {
+    //     console.log('Starting new recording');
+    //     mediaRecorder.current.start();
+    //   }
+    // };
+    
+
+    const intervalId = setInterval(() => {
+      if (mediaRecorder.current.state === 'recording') {
+        mediaRecorder.current.stop();
+        mediaRecorder.current.start(segmentDuration)
+      }
+    }, segmentDuration);
+
     setIsRecording(true);
     setIntervalId(intervalId);
-  
-    mediaRecorder.current.start();
+    setupStream();
+
+    // mediaRecorder.current.start();
   };
-  
+
+  const setupStream = () => {
+    mediaRecorder.current.start(segmentDuration);
+
+   
+  }
+
   const stopStream = () => {
     if (intervalId) {
       clearInterval(intervalId);
@@ -94,21 +139,28 @@ const AudioRecorder = () => {
       audioStream.current.getTracks().forEach(track => track.stop());
       audioStream.current = null;
     }
-    setIsRecording(false);
-  };
-  
-  
-
-
-  //  not used, won't be used unless creating a custom perview
-  /**
-   * @deprecated
-   */
-  const playAudio = () => {
-    const audio = new Audio(URL.createObjectURL(audioBlob));
-    audio.play();
+    setIsRecording(false)
   };
 
+
+  const handleDataAvailable = (event) => {
+    console.log('reached handleDataAvailable')
+    if (event.data.size > 0) {
+      chunks.push(event.data);
+      const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+      if(audioBlob.size > MIN_BLOB_SIZE) {
+        const segmentId = uuidv4();
+        console.log(`Sending audio segment ${segmentId}`);
+        console.log(audioBlob)
+        socket.emit('stream', {segmentId, audioBlob});
+        chunks = [];
+      }
+    }
+    else{
+      console.log('no data received in the event')
+    }
+  };
+  
   const sendTranscript = async (text) => {
     const response = await fetch("/transform", {
       method: "POST",
@@ -122,34 +174,6 @@ const AudioRecorder = () => {
       return data.content
     }
   }
-
-  /**
-   * 
-   *  @deprecated
-   */
-  const sendAudio = async () => {
-    const formData = new FormData();
-    formData.append("audio", new Blob([audioBlob], { type: "audio/wav" }));
-    console.log(audioBlob.size)
-    if (audioBlob.size > MAX_FILE_SIZE) {
-      // Replace MAX_FILE_SIZE with the maximum size in bytes you want to allow
-      console.error(`The audio file is too large. Maximum size is ${MAX_FILE_SIZE} bytes.`);
-      return;
-    }
-  
-    const response = await fetch("/transcribe", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      setTranscription(data.transcription);
-      sendTranscript(data.transcription)
-    } else {
-      console.error("Failed to transcribe audio");
-    }
-  };
 
   const headers = ["Name of Guest", "Gift Details", "Follow up question"]
   return (
@@ -173,9 +197,6 @@ const AudioRecorder = () => {
           <td className="transcription" data-label="Transcription"> 
               <p>{transcription}</p>
           </td>
-        </tr>
-        <tr>
-          <td>{recordingList}</td>
         </tr>
         </tbody>
       </table>
