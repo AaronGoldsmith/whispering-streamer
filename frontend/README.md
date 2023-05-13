@@ -10,36 +10,38 @@ A web application that streamlines the thank you card process by automatically t
 - Interactive user interface for real-time review and editing of transcriptions, gift details, and thank you messages
 - WebSocket-based communication for live streaming and processing of audio and transcriptions
 
+
+## Running locally
+1. Install ffmpeg using `brew install ffmpeg`
+- [ffmpeg](https://ffmpeg.org/) is a free audio conversion/streaming tool.
+
+2. Setup Frontend `cd frontend && npm install`
+  - This might take a minute as 
+
 ## Project Outline & Checklist
 
-### 1. Project Setup
+### 1. Frontend
 
-- [ ] Initialize a new project repository
-- [ ] Choose frontend and backend frameworks
-- [ ] Setup project directory structure
-
-### 2. Frontend
-
-- [ ] Implement audio recording functionality using Web Audio API or Recorder.js
+- [x] Implement audio recording functionality using Web Audio API 
 - [ ] Design UI components for audio recording and playback, live transcription display, and editing gift and gift-giver details
 - [ ] Implement a "Live Mode" toggle button to activate real-time audio streaming and transcription processing
 - [ ] Add WebSocket connection logic for real-time communication with the backend
 
-### 3. Backend
+### 2. Backend
 - [ ] See [Backend](../backend/README.md)
 
-### 4. Real-time Transcription Processing
+### 3. Real-time Transcription Processing
 
 - [ ] Modify frontend to automatically send audio segments to the backend every 30 seconds while in "Live Mode"
 - [ ] Display real-time transcriptions, gift-givers, and gifts in the frontend UI for user review and editing
 
-### 5. Testing and Deployment
+### 4. Testing and Deployment
 
 - [ ] Perform unit and integration testing of individual components
 - [ ] Conduct end-to-end testing of the application with real users
 - [ ] Deploy the application to a hosting provider (e.g., AWS, Heroku, etc.)
 
-### 6. Documentation
+### 5. Documentation
 
 - [ ] Write user documentation for application usage and features
 - [ ] Create developer documentation for future maintenance and updates
