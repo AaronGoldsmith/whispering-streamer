@@ -1,15 +1,15 @@
-import React, { useState, useRef, useContext, useEffect} from "react";
+import React, { useState, useRef, useContext, useEffect } from "react";
 import { WebSocketContext } from "./WebSocketProvider";
 import { v4 as uuidv4 } from 'uuid';
-import  {CSVTable} from "./CSVTable"
-import "./AudioRecorder.css";
+import { CSVTableBody } from "./CSVTable"
+import "../styles/AudioRecorder.css";
 
 const MIN_BLOB_SIZE = 1024; // 1KB 
 
 
 const isValid = (str) => {
   // break early and don't add to parsed data
-  if(str.length<4 || str.substring(0,4) == '[NA]'){
+  if (str.length < 4 || str.includes('[NA]')) {
     return false
   }
   return true;
@@ -31,12 +31,12 @@ const AudioRecorder = () => {
   useEffect(() => {
     // request for access to the client microphone
     isRecording && navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      audioStream.current = stream;
-      mediaRecorder.current = new MediaRecorder(stream);
-      mediaRecorder.current.ondataavailable = handleDataAvailable;
-      mediaRecorder.current.onstop = handleStop;
-    });
+      .then(stream => {
+        audioStream.current = stream;
+        mediaRecorder.current = new MediaRecorder(stream);
+        mediaRecorder.current.ondataavailable = handleDataAvailable;
+        mediaRecorder.current.onstop = handleStop;
+      });
 
     if (socket) {
       socket.on('transcription', async (data) => {
@@ -44,21 +44,21 @@ const AudioRecorder = () => {
           // update transcription box with the newly receieved details
           // do not clear out the existing transcription
           setTranscription((prevTranscription) => `${prevTranscription}\n\n${data.transcription}`);
-    
+
           // async function that sends the transcription and receives a CSV formatted string
           // Note: only send the current transcript
           const csvString = await sendTranscript(data.transcription)
           isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
         }
         // data.transcription == false when data.transcription = ''
-        else if(data.transcription == ''){
+        else if (data.transcription == '') {
           console.log('no transcription recorded')
-        } 
+        }
         else {
           console.error('Failed to transcribe audio');
         }
       });
-    }    
+    }
     return () => {
       if (socket) {
         socket.off('transcription');
@@ -67,12 +67,12 @@ const AudioRecorder = () => {
   }, [socket]); // if socket updates, rerun the block
 
   function handleStop() {
-    const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
+    const audioBlob = new Blob(chunks, { 'type': 'audio/wav' });
     // don't send audio blobs under 1kb
-    if(audioBlob.size > MIN_BLOB_SIZE) {
+    if (audioBlob.size > MIN_BLOB_SIZE) {
       const segmentId = uuidv4();
       console.log(`Sending audio segment ${segmentId}`);
-      socket.emit('stream', {segmentId, audioBlob});
+      socket.emit('stream', { segmentId, audioBlob });
     }
     chunks = [];
     if (isRecording) {
@@ -82,7 +82,7 @@ const AudioRecorder = () => {
       mediaRecorder.current.start(segmentDuration);
     }
   }
-  
+
   // called when the user clicks the "start recording" button
   const startStream = async () => {
     // start and stop recording at regular intervals to simulate chunked streaming
@@ -101,14 +101,14 @@ const AudioRecorder = () => {
   };
 
   const setupStream = () => {
-   navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      audioStream.current = stream;
-      mediaRecorder.current = new MediaRecorder(stream);
-      mediaRecorder.current.ondataavailable = handleDataAvailable;
-      mediaRecorder.current.onstop = handleStop;
-      mediaRecorder.current.start(segmentDuration);
-    });
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        audioStream.current = stream;
+        mediaRecorder.current = new MediaRecorder(stream);
+        mediaRecorder.current.ondataavailable = handleDataAvailable;
+        mediaRecorder.current.onstop = handleStop;
+        mediaRecorder.current.start(segmentDuration);
+      });
   }
 
   const stopStream = () => {
@@ -130,20 +130,20 @@ const AudioRecorder = () => {
   const handleDataAvailable = (event) => {
     if (event.data.size > 0) {
       chunks.push(event.data);
-      const audioBlob = new Blob(chunks, { 'type' : 'audio/wav' });
-      if(audioBlob.size > MIN_BLOB_SIZE) {
+      const audioBlob = new Blob(chunks, { 'type': 'audio/wav' });
+      if (audioBlob.size > MIN_BLOB_SIZE) {
         const segmentId = uuidv4();
         // console.log(`Sending audio segment ${segmentId}`);
         // console.log(audioBlob)
-        socket.emit('stream', {segmentId, audioBlob});
+        socket.emit('stream', { segmentId, audioBlob });
         chunks = [];
       }
     }
-    else{
+    else {
       console.log('no data received in the event')
     }
   };
-  
+
   const sendTranscript = async (text) => {
     const response = await fetch("/transform", {
       method: "POST",
@@ -171,23 +171,19 @@ const AudioRecorder = () => {
       </div>
       <table className="audio-controller">
         <thead>
-        <tr>
-          <th>Transcription</th>
-        </tr>
+          <tr>
+            <th colSpan={3}> Transcription</th>
+          </tr>
         </thead>
         <tbody>
-        <tr>
-          <td className="transcription" data-label="Transcription"> 
+          <tr>
+            <td className="transcription" data-label="Transcription" colSpan={3}>
               <p>{transcription}</p>
-          </td>
-        </tr>
+            </td>
+          </tr>
+          <CSVTableBody headers={headers} data={parsedData} />
         </tbody>
       </table>
-      <div className="csv-extract">          
-          <CSVTable headers={headers} data={parsedData}>
-        </CSVTable>
-       
-      </div>
     </div>
   );
 };

@@ -38,3 +38,7 @@
     margin-bottom: 5px;
   }
 }
+
+.transcription p{
+  min-height:100px;
+}
