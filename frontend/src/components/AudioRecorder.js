@@ -1,28 +1,29 @@
-import React, { useState, useRef, useContext, useEffect } from "react";
-import { WebSocketContext } from "./WebSocketProvider";
+import React, {
+  useState, useRef, useContext, useEffect,
+} from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { CSVTableBody } from "./CSVTable"
-import "../styles/AudioRecorder.css";
+import { WebSocketContext } from './WebSocketProvider';
+import { CSVTableBody } from './CSVTable';
+import '../styles/AudioRecorder.css';
 
-const MIN_BLOB_SIZE = 1024; // 1KB 
-
+const MIN_BLOB_SIZE = 1024; // 1KB
 
 const isValid = (str) => {
   // break early and don't add to parsed data
   if (str.length < 4 || str.includes('[NA]')) {
-    return false
+    return false;
   }
   return true;
-}
+};
 
-const AudioRecorder = () => {
+function AudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [intervalId, setIntervalId] = useState(null);
-  const [transcription, setTranscription] = useState("")
-  const [parsedData, setParsedData] = useState(null)
+  const [transcription, setTranscription] = useState('');
+  const [parsedData, setParsedData] = useState(null);
   const socket = useContext(WebSocketContext);
-  const mediaRecorder = useRef(null)
-  const audioStream = useRef(null)
+  const mediaRecorder = useRef(null);
+  const audioStream = useRef(null);
 
   let chunks = [];
   const segmentDuration = 10000;
@@ -31,7 +32,7 @@ const AudioRecorder = () => {
   useEffect(() => {
     // request for access to the client microphone
     isRecording && navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
+      .then((stream) => {
         audioStream.current = stream;
         mediaRecorder.current = new MediaRecorder(stream);
         mediaRecorder.current.ondataavailable = handleDataAvailable;
@@ -47,14 +48,13 @@ const AudioRecorder = () => {
 
           // async function that sends the transcription and receives a CSV formatted string
           // Note: only send the current transcript
-          const csvString = await sendTranscript(data.transcription)
-          isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`)
+          const csvString = await sendTranscript(data.transcription);
+          isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`);
         }
         // data.transcription == false when data.transcription = ''
         else if (data.transcription == '') {
-          console.log('no transcription recorded')
-        }
-        else {
+          console.log('no transcription recorded');
+        } else {
           console.error('Failed to transcribe audio');
         }
       });
@@ -67,7 +67,7 @@ const AudioRecorder = () => {
   }, [socket]); // if socket updates, rerun the block
 
   function handleStop() {
-    const audioBlob = new Blob(chunks, { 'type': 'audio/wav' });
+    const audioBlob = new Blob(chunks, { type: 'audio/wav' });
     // don't send audio blobs under 1kb
     if (audioBlob.size > MIN_BLOB_SIZE) {
       const segmentId = uuidv4();
@@ -89,7 +89,7 @@ const AudioRecorder = () => {
     const intervalId = setInterval(() => {
       if (mediaRecorder.current.state === 'recording') {
         mediaRecorder.current.stop();
-        mediaRecorder.current.start(segmentDuration)
+        mediaRecorder.current.start(segmentDuration);
       }
     }, segmentDuration);
 
@@ -102,35 +102,34 @@ const AudioRecorder = () => {
 
   const setupStream = () => {
     navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
+      .then((stream) => {
         audioStream.current = stream;
         mediaRecorder.current = new MediaRecorder(stream);
         mediaRecorder.current.ondataavailable = handleDataAvailable;
         mediaRecorder.current.onstop = handleStop;
         mediaRecorder.current.start(segmentDuration);
       });
-  }
+  };
 
   const stopStream = () => {
     if (intervalId) {
       clearInterval(intervalId);
       setIntervalId(null);
     }
-    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
       mediaRecorder.current.stop();
     }
     if (audioStream.current) {
-      audioStream.current.getTracks().forEach(track => track.stop());
+      audioStream.current.getTracks().forEach((track) => track.stop());
       audioStream.current = null;
     }
-    setIsRecording(false)
+    setIsRecording(false);
   };
-
 
   const handleDataAvailable = (event) => {
     if (event.data.size > 0) {
       chunks.push(event.data);
-      const audioBlob = new Blob(chunks, { 'type': 'audio/wav' });
+      const audioBlob = new Blob(chunks, { type: 'audio/wav' });
       if (audioBlob.size > MIN_BLOB_SIZE) {
         const segmentId = uuidv4();
         // console.log(`Sending audio segment ${segmentId}`);
@@ -138,34 +137,33 @@ const AudioRecorder = () => {
         socket.emit('stream', { segmentId, audioBlob });
         chunks = [];
       }
-    }
-    else {
-      console.log('no data received in the event')
+    } else {
+      console.log('no data received in the event');
     }
   };
 
   const sendTranscript = async (text) => {
-    const response = await fetch("/transform", {
-      method: "POST",
+    const response = await fetch('/transform', {
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ "data": text })
-    })
+      body: JSON.stringify({ data: text }),
+    });
     if (response.ok) {
       const data = await response.json();
-      return data.content
+      return data.content;
     }
-  }
+  };
 
-  const headers = ["Name of Guest", "Gift Details", "Follow up question"]
+  const headers = ['Name of Guest', 'Gift Details', 'Follow up question'];
   return (
     <div className="audio-recorder">
       <div className="button-list">
         <button
           onClick={isRecording ? stopStream : startStream}
         >
-          {isRecording ? "Stop Recording" : "Start Recording"}
+          {isRecording ? 'Stop Recording' : 'Start Recording'}
         </button>
 
       </div>
@@ -186,6 +184,6 @@ const AudioRecorder = () => {
       </table>
     </div>
   );
-};
+}
 
 export default AudioRecorder;

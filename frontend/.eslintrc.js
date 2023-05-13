@@ -1,7 +1,7 @@
 module.exports = {
   env: {
     browser: true,
-    es2021: true,
+    // es2021: true,
   },
   extends: [
     'plugin:react/recommended',
@@ -15,7 +15,8 @@ module.exports = {
   },
   plugins: [
     'react',
+    'eslint-plugin-react'
   ],
   rules: {
-  },
+  }
 };
