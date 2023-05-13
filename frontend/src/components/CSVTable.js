@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-
-function CSVTable({ headers, data}) {
+import '../styles/ResponsiveTable.css'
+function CSVTableBody({ headers, data}) {
   const [parsedData, setParsedData] = useState([]);
 
   useEffect(() => {
@@ -10,18 +10,17 @@ function CSVTable({ headers, data}) {
       return;
     }
     else if(data.length>0){ 
-      const rows = data.trim().split('\n');
+      // split for csv formatted rows 
+      const rows = data.trim().split('\n\n');
       const tempData = [];
   
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i].split(',');
-        // if (row.length === headers.length) {
           const rowData = {};
           for (let j = 0; j < headers.length; j++) {
             rowData[headers[j]] = row[j];
           }
           tempData.push(rowData);
-        // }
       }
       setParsedData(tempData);
     }
@@ -30,18 +29,15 @@ function CSVTable({ headers, data}) {
   }, [data]);
 
   
-
+  // TODO: take out of a table.
   const renderTable = () => {
     return (
-        <table style={{width: "100%"}}>
-         <thead>
+        <>
             <tr>
               {headers.map((header) => (
                 <th key={header}>{header}</th>
               ))}
             </tr>
-          </thead>
-          <tbody>
             {parsedData.map((row, index) => (
               <tr key={index}>
                 {Object.values(row).map((value, index) => (
@@ -50,8 +46,7 @@ function CSVTable({ headers, data}) {
               </tr>
               
             ))}
-          </tbody>
-        </table>
+        </>
     );
   };
 
@@ -59,4 +54,4 @@ function CSVTable({ headers, data}) {
   return renderTable();
 }
 
-export {CSVTable}
+export {CSVTableBody}
