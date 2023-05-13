@@ -13,10 +13,10 @@ function CSVTableBody({ headers, data }) {
       const rows = data.trim().split('\n\n');
       const tempData = [];
 
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = 1; i < rows.length; i += 1) {
         const row = rows[i].split(',');
         const rowData = {};
-        for (let j = 0; j < headers.length; j++) {
+        for (let j = 0; j < headers.length; j += 1) {
           rowData[headers[j]] = row[j];
         }
         tempData.push(rowData);
@@ -34,9 +34,9 @@ function CSVTableBody({ headers, data }) {
         ))}
       </tr>
       {parsedData.map((row, index) => (
-        <tr key={index}>
+        <tr key={`key-${index}`}>
           {Object.values(row).map((value, index) => (
-            <td key={index}>{value}</td>
+            <td key={`key-${index}`}>{value}</td>
           ))}
         </tr>
 

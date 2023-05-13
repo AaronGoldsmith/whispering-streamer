@@ -15,8 +15,11 @@ module.exports = {
   },
   plugins: [
     'react',
-    'eslint-plugin-react'
+    'eslint-plugin-react',
   ],
   rules: {
-  }
+    'react/jsx-filename-extension': 'off',
+    'comma-dangle': 'off'
+  },
+  ignorePatterns: ['src/**/*.test.js']
 };
