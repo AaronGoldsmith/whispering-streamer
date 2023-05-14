@@ -3,7 +3,7 @@ import React, {
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { WebSocketContext } from './WebSocketProvider';
-import { CSVTableBody } from './CSVTable';
+import CSVTableBody from './CSVTable';
 import '../styles/AudioRecorder.css';
 
 const MIN_BLOB_SIZE = 1024; // 1KB
@@ -26,7 +26,7 @@ function AudioRecorder() {
   const audioStream = useRef(null);
 
   let chunks = [];
-  const segmentDuration = 10000;
+  const segmentDuration = 20000;
 
   const handleDataAvailable = (event) => {
     if (event.data.size > 0) {
@@ -53,7 +53,7 @@ function AudioRecorder() {
     }
     chunks = [];
     if (isRecording) {
-      if (mediaRecorder.current.state == 'recording') {
+      if (mediaRecorder.current.state === 'recording') {
         mediaRecorder.current.stop();
       }
       mediaRecorder.current.start(segmentDuration);
@@ -72,19 +72,22 @@ function AudioRecorder() {
       const data = await response.json();
       return data.content;
     }
+    return 'Error during CSV transform';
   };
 
   // as soon as the component mounts
   useEffect(() => {
     if (socket) {
       // request for access to the client microphone
-      isRecording && navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream) => {
-          audioStream.current = stream;
-          mediaRecorder.current = new MediaRecorder(stream);
-          mediaRecorder.current.ondataavailable = handleDataAvailable;
-          mediaRecorder.current.onstop = handleStop;
-        });
+      if (isRecording) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then((stream) => {
+            audioStream.current = stream;
+            mediaRecorder.current = new MediaRecorder(stream);
+            mediaRecorder.current.ondataavailable = handleDataAvailable;
+            mediaRecorder.current.onstop = handleStop;
+          });
+      }
       // eslint-disable-next-line react/destructuring-assignment
       socket.on('transcription', async (data) => {
         if (data.transcription) {
@@ -95,10 +98,10 @@ function AudioRecorder() {
           // async function that sends the transcription and receives a CSV formatted string
           // Note: only send the current transcript
           const csvString = await sendTranscript(data.transcription);
-          isValid(csvString) && setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`);
-        }
-        // data.transcription == false when data.transcription = ''
-        else if (data.transcription == '') {
+          if (isValid(csvString)) {
+            setParsedData((prevParsedData) => `${prevParsedData}\n\n${csvString}`);
+          }
+        } else if (data.transcription === '') {
           console.log('no transcription recorded');
         } else {
           console.error('Failed to transcribe audio');
@@ -161,6 +164,7 @@ function AudioRecorder() {
     <div className="audio-recorder">
       <div className="button-list">
         <button
+          type="button"
           onClick={isRecording ? stopStream : startStream}
         >
           {isRecording ? 'Stop Recording' : 'Start Recording'}

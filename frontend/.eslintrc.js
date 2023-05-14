@@ -19,6 +19,7 @@ module.exports = {
   ],
   rules: {
     'react/jsx-filename-extension': 'off',
+    'react/prop-types': 'off',
     'comma-dangle': 'off'
   },
   ignorePatterns: ['src/**/*.test.js']

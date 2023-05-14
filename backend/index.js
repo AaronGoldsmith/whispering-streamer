@@ -9,6 +9,9 @@ const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 const util = require('./util');
 
+const prompt_config = require('./util/prompt_config.json');
+const { systemPrompt, noShot, fewShot } = prompt_config;
+
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -59,13 +62,23 @@ io.on('connection', (socket) => {
       }
       // Run the conversion process after slight delay
       setTimeout(() => {
-        ffmpeg(streams[segmentId].tempFilePath)
+        try{
+          ffmpeg(streams[segmentId].tempFilePath)
           .format('mp3')
           .on('end', async () => {
+            
             console.log('Finished converting to mp3');
+
             try {
-              const transcription = await util.processMP3(openai, streams[segmentId].outputFilePath);
-              socket.emit('transcription', { transcription });
+              if(parseFloat(streams[segmentId].max_volume) > -30 && 
+                  parseFloat(streams[segmentId].mean_volume) > -50){
+                const transcription = await util.processMP3(openai, streams[segmentId].outputFilePath);
+                socket.emit('transcription', { transcription });
+              }
+              else{
+                console.log('too quiet, not sending to transcription service')
+              }
+             
             } catch (error) {
               console.error('Error during transcription:', error);
               socket.emit('transcription', { error: 'Transcription failed' });
@@ -83,13 +96,28 @@ io.on('connection', (socket) => {
               processNextSegment(socket);
             }
           })
+          .on('stderr', function(stderrLine) {
+            // This event is emitted for each line that FFmpeg writes to stderr.
+            // stderrLine is a string containing one line of text.
+            if (stderrLine.includes('mean_volume')) {
+              // console.log('Mean volume:', stderrLine.split(':')[1].trim());
+              streams[segmentId].mean_volume = stderrLine.split(':')[1].trim()
+            } else if (stderrLine.includes('max_volume')) {
+              // console.log('Max volume:', stderrLine.split(':')[1].trim());
+              streams[segmentId].max_volume = stderrLine.split(':')[1].trim()
+            }
+          })
           .on('error', (ffmpeg_err) => {
-            console.log(`An error occurred during conversion: ${err.message}`);
+            console.log(`An error occurred during conversion: ${ffmpeg_err.message}`);
             console.log(ffmpeg_err);
           })
           .output(streams[segmentId].outputFilePath)
+          .audioFilters('volumedetect')  // apply 'volumedetect' filter
           .run();
-      }, 2000);
+      }catch(err){
+        processNextSegment(socket)
+        console.log(err)}
+      }, 1500);
     });
   }
 
@@ -136,14 +164,6 @@ io.on('connection', (socket) => {
 
 app.post('/transform', async (req, res) => {
   console.log('body', req.body);
-  const systemPrompt = { role: 'system', content: "You are taking a transcription during a gift opening and formatting it for a CSV. The CSV exists with headers \"Name of Guest\", \"Gift Details\", \"Follow up question (optional)\". Only respond with the new line separated rows. Any other response will interfere with the program's output. If no gift-giving happenings are found, respond with '[NA]'; before doing so first try to identify any gifts listed and match them to the associated senders." };
-  const noShot = [{ role: 'user', content: "Audio Transcription: Oh my Two hundred dollars from Bri's godmother. Uh, which what's your godmother's name, Bridget. Darron Bri may, god pour all this blessings in your marriage may He guide you both with his love. Always cherish and love each other by swishes and the best is yet to come.It is really nice. Oh wow.\nJesus. 200 dollars in amazon cards from Tio Carlos\nAre you putting the gifts back in here? Yeah.\nThis is literally the best card ever, who is it from. Your dad. Oh, he literally chose the best ***** card. That is the will let them know. Darron, and you're in too bad. The cats can't be at the wedding {dot} {dot}. We're thrilled to be here with you today. Sending much love. Always love.\nIrene. Okay. I like it looked like a jig anime. Yeah. That is a really nice. I like love. Oh. Yeah, okay. Wait no, yeah, my dad. Yeah we i think he thought he hand brought one over here. There's oh i think there is a card over there that he is also for my dad. If you just want to drop that real quick. The others too. And, We got. A thousand dollars from. Uh, the Dorelmo family, right? Yeah, okay. This one must turn dresses and stay gave us 300. This is from grandma. Two thousand dollars. Yeah.Oh yeah. and a thousand from Aunt sandy and uncle randy. Another gift from Doug! 500 dollars to bed bath and beyond. \nFile: Name of Guest, Gift Details, Follow up question" },
-    { role: 'assistant', content: "\"Bri's godmother (Bridget)\",\"200 dollars\",\n\"Tio Carlos\",\"200 dollars in Amazon cards\", \"dad,Best card ever\",\"father of bride or groom? /Let them know it was the best card\"\n\"Irene\",\"Card with love\",\n\"Dorelmo family\",\"1000 dollars\",\n\"Steve\",\"300 dollars\",\"I might have misheard the name when you said 'stay gave us 300'\"\n\"Grandma\",\"2000 dollars\",\n\"Aunt Sandy and Uncle Randy\",\"1000 dollars\",\n\"Doug\",\"500 dollars to Bed Bath and Beyond\"," },
-  ];
-  const fewShot = [
-    { role: 'user', content: "Audio Transcription: I got one dollar from Joe and two dollars from Sam, three dollars from Jose, gift card to TJ's from Ma'am. Okay.. but yeah" },
-    { role: 'assistant', content: "\"Joe\",\"$1\",\n\"Sam\",\"$2\",\n\"Jose\",\"$3\" ,\n\"Ma'am\",\"gift card to TJ's\",\"Did you say Ma'm or mom?\"" }];
-
   const prompt = `Audio Transcription: ${req.body.data}\nFile: Name of Guest, Gift Details, Follow up question (optional)`;
   const messages = [
     systemPrompt,

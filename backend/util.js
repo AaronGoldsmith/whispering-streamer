@@ -10,7 +10,7 @@ function readMP3File(filepath) {
 
 async function transcribeAudio(openai, stream) {
   try {
-    const resp = await openai.createTranscription(stream, 'whisper-1');
+    const resp = await openai.createTranscription(stream, 'whisper-1','English only.');
     return resp.data.text;
   } catch (error) {
     throw new Error(`Unable to create transcription: ${error.message}`);
@@ -27,21 +27,12 @@ async function transcribeAudio(openai, stream) {
  * @returns {Promise<string>} A Promise that resolves with the transcription result.
  */
 async function processMP3(openai, filepath) {
-  console.log('Starting to process MP3...');
-
   const stream = readMP3File(filepath);
-  console.log(stream.readable ? 'readable stream' : 'n/a');
-
-  let transcription;
-  console.log('About to call transcribeAudio...');
-
+  let transcription = ''
   try {
     transcription = await transcribeAudio(openai, stream);
-    const output = transcription == '' ? '<No words were heard>' : transcription;
-    console.log('Received transcription: ', output);
   } catch (error) {
     console.error('Error during transcription:', error);
-    transcription = '';
   }
   return transcription;
 }

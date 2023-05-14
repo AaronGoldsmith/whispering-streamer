@@ -33,10 +33,10 @@ function CSVTableBody({ headers, data }) {
           <th key={header}>{header}</th>
         ))}
       </tr>
-      {parsedData.map((row, index) => (
-        <tr key={`key-${index}`}>
+      {parsedData.map((row, i) => (
+        <tr key={`key-${parsedData[i][0]}`}>
           {Object.values(row).map((value, index) => (
-            <td key={`key-${index}`}>{value}</td>
+            <td key={parsedData[i][0] + ['name', 'gift', 'question'][index]}>{value}</td>
           ))}
         </tr>
 
@@ -47,4 +47,4 @@ function CSVTableBody({ headers, data }) {
   return renderTable();
 }
 
-export { CSVTableBody };
+export default CSVTableBody;
