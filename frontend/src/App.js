@@ -1,7 +1,7 @@
-import React from "react";
-import AudioRecorder from "./components/AudioRecorder";
-import { WebSocketProvider } from "./components/WebSocketProvider";
-import './App.css'
+import React from 'react';
+import AudioRecorder from './components/AudioRecorder';
+import { WebSocketProvider } from './components/WebSocketProvider';
+import './App.css';
 
 function App() {
   return (
@@ -14,4 +14,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

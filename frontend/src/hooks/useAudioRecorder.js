@@ -1,38 +1,20 @@
-import React, {
-  useState, useRef, useContext, useEffect,
-} from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { WebSocketContext } from './WebSocketProvider';
-import CSVTableBody from './CSVTable';
-import '../styles/AudioRecorder.css';
 
 const MIN_BLOB_SIZE = 1024; // 1KB
-const MIN_LENGTH = 4;
 
-const isValid = (str) => {
-  // break early and don't add to parsed data
-  if (str.length < MIN_LENGTH || str.includes('[NA]')) {
-    return false;
-  }
-  return true;
-};
-
-function AudioRecorder() {
+export const useAudioRecorder = (socket) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [intervalId, setIntervalId] = useState(null);
-  const [transcription, setTranscription] = useState('');
-  const [parsedData, setParsedData] = useState(null);
-  const socket = useContext(WebSocketContext);
   const mediaRecorder = useRef(null);
   const audioStream = useRef(null);
 
   let chunks = [];
-  const segmentDuration = 20000;
+  const segmentDuration = 10000;
 
   /**
- * handleDataAvailable is called when the MediaRecorder has data available.
- * It adds the data to the chunks array and sends it to the server if it's large enough.
- */
+   * handleDataAvailable is called when the MediaRecorder has data available.
+   * It adds the data to the chunks array and sends it to the server if it's large enough.
+   */
   const handleDataAvailable = (event) => {
     if (event.data.size > 0) {
       chunks.push(event.data);
@@ -49,10 +31,10 @@ function AudioRecorder() {
   };
 
   /**
- * handleStop is called when the MediaRecorder stops recording.
- * It creates an audio blob from the recorded chunks and sends it to the server.
- * If the component is still recording, it restarts the MediaRecorder.
- */
+  * handleStop is called when the MediaRecorder stops recording.
+  * It creates an audio blob from the recorded chunks and sends it to the server.
+  * If the component is still recording, it restarts the MediaRecorder.
+  */
   function handleStop() {
     const audioBlob = new Blob(chunks, { type: 'audio/wav' });
     // don't send audio blobs under 1kb
@@ -71,10 +53,10 @@ function AudioRecorder() {
   }
 
   /**
- * sendTranscript sends the given text to the server and returns the server's response.
- * @param {string} text - The text to send to the server.
- * @returns {Promise<string>} The server's response containing a CSV string
- */
+  * sendTranscript sends the given text to the server and returns the server's response.
+  * @param {string} text - The text to send to the server.
+  * @returns {Promise<string>} The server's response containing a CSV string
+  */
   const sendTranscript = async (text) => {
     const response = await fetch('/transform', {
       method: 'POST',
@@ -132,8 +114,8 @@ function AudioRecorder() {
   }, [socket]); // if socket updates, rerun the block
 
   /**
- * setupStream requests access to the user's microphone and initializes the MediaRecorder.
- */
+  * setupStream requests access to the user's microphone and initializes the MediaRecorder.
+  */
   const setupStream = () => {
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then((stream) => {
@@ -146,10 +128,10 @@ function AudioRecorder() {
   };
 
   /**
- * startStream is called when the user clicks the "start recording" button.
- * It starts the MediaRecorder and sets up an interval to stop and restart
- * the MediaRecorder every segmentDuration milliseconds.
- */
+  * startStream is called when the user clicks the "start recording" button.
+  * It starts the MediaRecorder and sets up an interval to stop and restart
+  * the MediaRecorder every segmentDuration milliseconds.
+  */
   const startStream = async () => {
     // start and stop recording at regular intervals to simulate chunked streaming
     const intervalref = setInterval(() => {
@@ -165,9 +147,9 @@ function AudioRecorder() {
   };
 
   /**
- * stopStream is called when the user clicks the "stop recording" button.
- * It stops the MediaRecorder and the stream from the user's microphone.
- */
+  * stopStream is called when the user clicks the "stop recording" button.
+  * It stops the MediaRecorder and the stream from the user's microphone.
+  */
   const stopStream = () => {
     if (intervalId) {
       clearInterval(intervalId);
@@ -183,35 +165,7 @@ function AudioRecorder() {
     setIsRecording(false);
   };
 
-  const headers = ['Name of Guest', 'Gift Details', 'Follow up question'];
-  return (
-    <div className="audio-recorder">
-      <div className="button-list">
-        <button
-          type="button"
-          onClick={isRecording ? stopStream : startStream}
-        >
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
-        </button>
-
-      </div>
-      <table className="audio-controller">
-        <thead>
-          <tr>
-            <th colSpan={3}> Transcription</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="transcription" data-label="Transcription" colSpan={3}>
-              <p>{transcription}</p>
-            </td>
-          </tr>
-          <CSVTableBody headers={headers} data={parsedData} />
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export default AudioRecorder;
+  return {
+    isRecording, startStream, stopStream, transcription, parsedData
+  };
+};

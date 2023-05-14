@@ -1,62 +1,50 @@
 import React, { useState, useEffect } from 'react';
+import '../styles/ResponsiveTable.css';
 
-function CSVTable({ headers, data}) {
+function CSVTableBody({ headers, data }) {
   const [parsedData, setParsedData] = useState([]);
 
   useEffect(() => {
     // don't set data if no children present
-    if (data === null || typeof(data) == "undefined") {
+    if (data === null || typeof (data) === 'undefined') {
       setParsedData([]);
-      return;
-    }
-    else if(data.length>0){ 
-      const rows = data.trim().split('\n');
+    } else if (data.length > 0) {
+      // split for csv formatted rows
+      const rows = data.trim().split('\n\n');
       const tempData = [];
-  
-      for (let i = 1; i < rows.length; i++) {
+
+      for (let i = 1; i < rows.length; i += 1) {
         const row = rows[i].split(',');
-        // if (row.length === headers.length) {
-          const rowData = {};
-          for (let j = 0; j < headers.length; j++) {
-            rowData[headers[j]] = row[j];
-          }
-          tempData.push(rowData);
-        // }
+        const rowData = {};
+        for (let j = 0; j < headers.length; j += 1) {
+          rowData[headers[j]] = row[j];
+        }
+        tempData.push(rowData);
       }
       setParsedData(tempData);
     }
-   
-
   }, [data]);
 
-  
+  // TODO: take out of a table.
+  const renderTable = () => (
+    <>
+      <tr>
+        {headers.map((header) => (
+          <th key={header}>{header}</th>
+        ))}
+      </tr>
+      {parsedData.map((row, i) => (
+        <tr key={`key-${parsedData[i][0]}`}>
+          {Object.values(row).map((value, index) => (
+            <td key={parsedData[i][0] + ['name', 'gift', 'question'][index]}>{value}</td>
+          ))}
+        </tr>
 
-  const renderTable = () => {
-    return (
-        <table style={{width: "100%"}}>
-         <thead>
-            <tr>
-              {headers.map((header) => (
-                <th key={header}>{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {parsedData.map((row, index) => (
-              <tr key={index}>
-                {Object.values(row).map((value, index) => (
-                  <td key={index}>{value}</td>
-                ))}
-              </tr>
-              
-            ))}
-          </tbody>
-        </table>
-    );
-  };
-
+      ))}
+    </>
+  );
 
   return renderTable();
 }
 
-export {CSVTable}
+export default CSVTableBody;
