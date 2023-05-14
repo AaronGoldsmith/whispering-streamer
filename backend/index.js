@@ -10,6 +10,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const util = require('./util');
 
 const prompt_config = require('./util/prompt_config.json');
+
 const { systemPrompt, noShot, fewShot } = prompt_config;
 
 const configuration = new Configuration({
@@ -37,7 +38,7 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   function processNextSegment(socket) {
     const segmentId = processingQueue[0];
-  
+
     console.log('Processing next segment ', streams[segmentId].tempFilePath.split('/').pop());
     // Check if the file exists and is not empty
     fs.stat(streams[segmentId].tempFilePath, (err, stats) => {
@@ -50,7 +51,7 @@ io.on('connection', (socket) => {
         }
         return;
       }
-  
+
       if (stats.size === 0) {
         console.error(`File ${streams[segmentId].tempFilePath} is empty`);
         // Handle error, same as above
@@ -62,61 +63,59 @@ io.on('connection', (socket) => {
       }
       // Run the conversion process after slight delay
       setTimeout(() => {
-        try{
+        try {
           ffmpeg(streams[segmentId].tempFilePath)
-          .format('mp3')
-          .on('end', async () => {
-            
-            console.log('Finished converting to mp3');
+            .format('mp3')
+            .on('end', async () => {
+              console.log('Finished converting to mp3');
 
-            try {
-              if(parseFloat(streams[segmentId].max_volume) > -30 && 
-                  parseFloat(streams[segmentId].mean_volume) > -50){
-                const transcription = await util.processMP3(openai, streams[segmentId].outputFilePath);
-                socket.emit('transcription', { transcription });
-              }
-              else{
-                console.log('too quiet, not sending to transcription service')
-              }
-             
-            } catch (error) {
-              console.error('Error during transcription:', error);
-              socket.emit('transcription', { error: 'Transcription failed' });
-            } finally {
+              try {
+                if (parseFloat(streams[segmentId].max_volume) > -30
+                  && parseFloat(streams[segmentId].mean_volume) > -50) {
+                  const transcription = await util.processMP3(openai, streams[segmentId].outputFilePath);
+                  socket.emit('transcription', { transcription });
+                } else {
+                  console.log('too quiet, not sending to transcription service');
+                }
+              } catch (error) {
+                console.error('Error during transcription:', error);
+                socket.emit('transcription', { error: 'Transcription failed' });
+              } finally {
               // Cleanup
-              if (streams[segmentId]) {
-                streams[segmentId].tempFileStream.end();
-                fs.unlinkSync(streams[segmentId].tempFilePath);
+                if (streams[segmentId]) {
+                  streams[segmentId].tempFileStream.end();
+                  fs.unlinkSync(streams[segmentId].tempFilePath);
+                }
               }
-            }
-  
-            // Remove the processed segment from the queue and start processing the next one
-            processingQueue.shift();
-            if (processingQueue.length > 0) {
-              processNextSegment(socket);
-            }
-          })
-          .on('stderr', function(stderrLine) {
+
+              // Remove the processed segment from the queue and start processing the next one
+              processingQueue.shift();
+              if (processingQueue.length > 0) {
+                processNextSegment(socket);
+              }
+            })
+            .on('stderr', (stderrLine) => {
             // This event is emitted for each line that FFmpeg writes to stderr.
             // stderrLine is a string containing one line of text.
-            if (stderrLine.includes('mean_volume')) {
+              if (stderrLine.includes('mean_volume')) {
               // console.log('Mean volume:', stderrLine.split(':')[1].trim());
-              streams[segmentId].mean_volume = stderrLine.split(':')[1].trim()
-            } else if (stderrLine.includes('max_volume')) {
+                streams[segmentId].mean_volume = stderrLine.split(':')[1].trim();
+              } else if (stderrLine.includes('max_volume')) {
               // console.log('Max volume:', stderrLine.split(':')[1].trim());
-              streams[segmentId].max_volume = stderrLine.split(':')[1].trim()
-            }
-          })
-          .on('error', (ffmpeg_err) => {
-            console.log(`An error occurred during conversion: ${ffmpeg_err.message}`);
-            console.log(ffmpeg_err);
-          })
-          .output(streams[segmentId].outputFilePath)
-          .audioFilters('volumedetect')  // apply 'volumedetect' filter
-          .run();
-      }catch(err){
-        processNextSegment(socket)
-        console.log(err)}
+                streams[segmentId].max_volume = stderrLine.split(':')[1].trim();
+              }
+            })
+            .on('error', (ffmpeg_err) => {
+              console.log(`An error occurred during conversion: ${ffmpeg_err.message}`);
+              console.log(ffmpeg_err);
+            })
+            .output(streams[segmentId].outputFilePath)
+            .audioFilters('volumedetect') // apply 'volumedetect' filter
+            .run();
+        } catch (err) {
+          processNextSegment(socket);
+          console.log(err);
+        }
       }, 1500);
     });
   }
@@ -159,8 +158,6 @@ io.on('connection', (socket) => {
     streams[segmentId].tempFileStream.end();
   });
 });
-
-
 
 app.post('/transform', async (req, res) => {
   console.log('body', req.body);

@@ -28,7 +28,7 @@ async function transcribeAudio(openai, stream) {
  */
 async function processMP3(openai, filepath) {
   const stream = readMP3File(filepath);
-  let transcription = ''
+  let transcription = '';
   try {
     transcription = await transcribeAudio(openai, stream);
   } catch (error) {
